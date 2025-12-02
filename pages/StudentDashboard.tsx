@@ -58,14 +58,13 @@ export default function StudentDashboard() {
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const fetchedTasks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Task));
-      // Sort: 1. Incomplete before Completed, 2. High Priority before Low, 3. Date
+      // Sort: Oldest to Newest based on creation time (no shuffle, no priority sort)
+      // We also use ID as a fallback to ensure stable sort order if timestamps are identical
       fetchedTasks.sort((a, b) => {
-        if (a.completed !== b.completed) return a.completed ? 1 : -1;
-        const priorityScore = { high: 3, medium: 2, low: 1 };
-        const pA = priorityScore[a.priority || 'medium'];
-        const pB = priorityScore[b.priority || 'medium'];
-        if (pA !== pB) return pB - pA; // Higher score first
-        return a.dueDate - b.dueDate;
+        if (a.createdAt !== b.createdAt) {
+          return a.createdAt - b.createdAt;
+        }
+        return a.id.localeCompare(b.id);
       });
       setTasks(fetchedTasks);
     }, (error) => {

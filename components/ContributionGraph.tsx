@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { Task } from '../types';
-import { format, eachDayOfInterval, endOfMonth, startOfMonth, subMonths, getDay } from 'date-fns';
+import { format, eachDayOfInterval, endOfMonth, startOfMonth, subMonths, addMonths, getDay } from 'date-fns';
 
 interface ContributionGraphProps {
   tasks: Task[];
@@ -8,15 +8,22 @@ interface ContributionGraphProps {
 }
 
 export const ContributionGraph: React.FC<ContributionGraphProps> = ({ tasks, className = '' }) => {
-  const today = new Date();
-
-  // 1. Generate the last 12 months (Starting from CURRENT month backwards)
+  // 1. Generate months starting from the most recent December (Fixed Start Month)
   const months = useMemo(() => {
     const result = [];
-    // Changed loop to start from 0 (current) to 11 (past)
+    const today = new Date();
+    
+    // Find the anchor December:
+    // If today is Dec, start from today.
+    // If today is any other month, go back to the previous December.
+    let startDate = startOfMonth(today);
+    while (startDate.getMonth() !== 11) { // 11 = December
+      startDate = subMonths(startDate, 1);
+    }
+
+    // Generate 12 months forward (Dec, Jan, Feb... Nov)
     for (let i = 0; i < 12; i++) {
-      const date = subMonths(today, i);
-      result.push(date);
+      result.push(addMonths(startDate, i));
     }
     return result;
   }, []);
@@ -53,7 +60,7 @@ export const ContributionGraph: React.FC<ContributionGraphProps> = ({ tasks, cla
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
           <span className="text-green-500 text-xl">⚡</span>
-          <span>Study Consistency</span>
+          <span>Study or Task Consistency</span>
         </h3>
         
         {/* Legend - Visible on mobile now */}
@@ -78,8 +85,6 @@ export const ContributionGraph: React.FC<ContributionGraphProps> = ({ tasks, cla
             
             // Create array with empty slots for correct alignment
             // grid-flow-col fills top-to-bottom, then left-to-right
-            // So Slot 0 is Sunday, Slot 1 is Monday...
-            // We pad based on startDay (e.g. if startDay is 2 (Tue), we need 2 empty slots for Sun, Mon)
             const gridSlots = Array(startDay).fill(null).concat(daysInMonth);
 
             return (
@@ -89,14 +94,16 @@ export const ContributionGraph: React.FC<ContributionGraphProps> = ({ tasks, cla
                 </span>
                 
                 <div className="flex gap-2">
-                   {/* Day Names Vertical Column - Only show for the first visible month to save space, OR repeat for clarity. Repeating is safer for scroll. */}
-                   <div className="grid grid-rows-7 gap-1.5 h-max pr-1">
-                      {dayLabels.map((day, i) => (
-                        <span key={i} className="text-[9px] text-slate-400 dark:text-slate-500 font-medium h-3.5 flex items-center justify-end leading-none">
-                          {day}
-                        </span>
-                      ))}
-                   </div>
+                   {/* Day Names Vertical Column - Only show for the first month to reduce clutter */}
+                   {monthIndex === 0 && (
+                     <div className="grid grid-rows-7 gap-1.5 h-max pr-1">
+                        {dayLabels.map((day, i) => (
+                          <span key={i} className="text-[9px] text-slate-400 dark:text-slate-500 font-medium h-3.5 flex items-center justify-end leading-none">
+                            {day}
+                          </span>
+                        ))}
+                     </div>
+                   )}
 
                    {/* Days Grid - Flow Column (Vertical Days) */}
                    <div className="grid grid-rows-7 grid-flow-col gap-1.5 auto-cols-min">
