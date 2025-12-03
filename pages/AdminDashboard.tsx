@@ -1,11 +1,11 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
-import { collection, query, getDocs, setDoc, doc } from 'firebase/firestore';
+import { collection, query, getDocs, setDoc, doc, onSnapshot, orderBy, limit, updateDoc, where } from 'firebase/firestore';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import { db, firebaseConfig } from '../firebase'; 
-import { UserProfile, Task } from '../types';
+import { UserProfile, Task, AppNotification } from '../types';
 import { ContributionGraph } from '../components/ContributionGraph';
 import { ConfirmationModal } from '../components/ui/ConfirmationModal';
 import { ProfileModal } from '../components/ProfileModal';
@@ -17,9 +17,9 @@ import {
   Users, CheckCircle2, LayoutDashboard, AlertCircle, 
   RefreshCcw, ShieldAlert, Bell, Filter, 
   ListTodo, Activity, FileSpreadsheet, ChevronLeft, ChevronRight, X, UserPlus, Download,
-  Eye, EyeOff, Clock, Sparkles, BarChart3, Calendar, Check, FileDown
+  Eye, EyeOff, Clock, Sparkles, BarChart3, Calendar, Check, FileDown, Info
 } from 'lucide-react';
-import { subDays, format, isSameDay, startOfMonth, endOfMonth, eachDayOfInterval, getDate, isPast, startOfDay, isToday, startOfWeek, endOfWeek } from 'date-fns';
+import { subDays, format, isSameDay, startOfMonth, endOfMonth, eachDayOfInterval, getDate, isPast, startOfDay, isToday, startOfWeek, endOfWeek, formatDistanceToNow } from 'date-fns';
 
 // --- Types for Admin Specific Features ---
 type SortOption = 'name' | 'consistency' | 'overdue' | 'completion';
@@ -164,11 +164,14 @@ export default function AdminDashboard() {
   const [students, setStudents] = useState<UserProfile[]>([]);
   const [selectedStudent, setSelectedStudent] = useState<UserProfile | null>(null);
   const [allTasks, setAllTasks] = useState<Task[]>([]);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
   
   // UI State
   const [loading, setLoading] = useState(false);
   const [logoutModalOpen, setLogoutModalOpen] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const notificationRef = useRef<HTMLDivElement>(null); // Ref for click outside
   
   // Export State
   const [showExportModal, setShowExportModal] = useState(false);
@@ -199,6 +202,35 @@ export default function AdminDashboard() {
     fetchData();
   }, []);
 
+  // Click Outside to Close Notifications
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
+        setShowNotifications(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [notificationRef]);
+
+  // Real-time notifications listener
+  useEffect(() => {
+    const q = query(
+      collection(db, 'notifications'), 
+      orderBy('createdAt', 'desc'), 
+      limit(20)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const fetched = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AppNotification));
+      setNotifications(fetched);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -223,6 +255,21 @@ export default function AdminDashboard() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const markAsRead = async (notifId: string) => {
+    try {
+      await updateDoc(doc(db, 'notifications', notifId), {
+        read: true
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const markAllRead = async () => {
+    const unread = notifications.filter(n => !n.read);
+    unread.forEach(n => markAsRead(n.id));
   };
 
   const getStudentName = (uid: string) => {
@@ -382,6 +429,9 @@ export default function AdminDashboard() {
       return !isNaN(d.getTime()) && !t.completed && isPast(startOfDay(d)) && !isToday(d);
   }).length;
   const systemCompletionRate = systemTotalTasks ? Math.round((systemCompletedTasks / systemTotalTasks) * 100) : 0;
+  
+  // Notification Count
+  const unreadCount = notifications.filter(n => !n.read).length;
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-slate-900 transition-colors duration-300 font-sans flex flex-col">
@@ -397,6 +447,70 @@ export default function AdminDashboard() {
             </div>
             
             <div className="flex items-center gap-4">
+               {/* Notifications */}
+               <div className="relative" ref={notificationRef}>
+                  <button 
+                    onClick={() => setShowNotifications(!showNotifications)}
+                    className="p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full transition-all relative"
+                  >
+                    <Bell className="w-5 h-5" />
+                    {unreadCount > 0 && (
+                      <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white dark:border-slate-800"></span>
+                    )}
+                  </button>
+                  
+                  {/* Notification Dropdown */}
+                  {showNotifications && (
+                    <div className="absolute right-0 top-12 w-80 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 overflow-hidden z-50 animate-in slide-in-from-top-2 fade-in duration-200">
+                      <div className="p-3 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-800">
+                        <span className="font-bold text-xs uppercase text-slate-500 dark:text-slate-400">Notifications</span>
+                        <div className="flex items-center gap-3">
+                           {unreadCount > 0 && (
+                             <button onClick={markAllRead} className="text-xs text-brand-600 dark:text-brand-400 hover:underline">
+                               Mark all read
+                             </button>
+                           )}
+                           <button 
+                                onClick={() => setShowNotifications(false)} 
+                                className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full transition-colors"
+                            >
+                                <X className="w-3.5 h-3.5" />
+                            </button>
+                        </div>
+                      </div>
+                      <div className="max-h-[300px] overflow-y-auto custom-scrollbar">
+                        {notifications.length === 0 ? (
+                          <div className="p-6 text-center text-slate-400 text-sm">
+                            No notifications yet.
+                          </div>
+                        ) : (
+                          notifications.map(notif => (
+                            <div 
+                              key={notif.id} 
+                              onClick={() => markAsRead(notif.id)}
+                              className={`p-3 border-b border-slate-50 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer transition-colors ${!notif.read ? 'bg-blue-50/50 dark:bg-blue-900/10' : ''}`}
+                            >
+                              <div className="flex gap-3">
+                                <div className={`mt-1 flex-shrink-0 w-2 h-2 rounded-full ${!notif.read ? 'bg-blue-500' : 'bg-transparent'}`}></div>
+                                <div className="flex-1">
+                                  <p className={`text-sm ${!notif.read ? 'font-semibold text-slate-900 dark:text-white' : 'text-slate-600 dark:text-slate-300'}`}>
+                                    {notif.message}
+                                  </p>
+                                  <p className="text-xs text-slate-400 mt-1">
+                                    {formatDistanceToNow(notif.createdAt, { addSuffix: true })}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+               </div>
+
+               <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1"></div>
+
                <button onClick={toggleTheme} className="p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full transition-all">
                  {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
                </button>

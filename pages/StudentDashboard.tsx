@@ -58,8 +58,8 @@ export default function StudentDashboard() {
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const fetchedTasks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Task));
+      
       // Sort: Oldest to Newest based on creation time (no shuffle, no priority sort)
-      // We also use ID as a fallback to ensure stable sort order if timestamps are identical
       fetchedTasks.sort((a, b) => {
         if (a.createdAt !== b.createdAt) {
           return a.createdAt - b.createdAt;
@@ -67,6 +67,33 @@ export default function StudentDashboard() {
         return a.id.localeCompare(b.id);
       });
       setTasks(fetchedTasks);
+
+      // --- CHECK FOR OVERDUE TASKS & NOTIFY ADMIN ---
+      fetchedTasks.forEach(async (task) => {
+        // If task is not completed, is overdue (before today's start), and we haven't notified admin yet
+        const isOverdue = !task.completed && isPast(startOfDay(task.dueDate)) && !isToday(task.dueDate);
+        
+        if (isOverdue && !task.overdueNotificationSent) {
+           try {
+              // 1. Send Notification
+              await addDoc(collection(db, 'notifications'), {
+                type: 'warning',
+                message: `${userProfile?.displayName || 'Student'} has an overdue task: '${task.title}'`,
+                createdAt: Date.now(),
+                read: false,
+                studentId: user.uid
+              });
+
+              // 2. Mark task as notified (to prevent loops/duplicate notifs)
+              await updateDoc(doc(db, 'tasks', task.id), {
+                overdueNotificationSent: true
+              });
+           } catch (e) {
+             console.error("Error sending overdue notification:", e);
+           }
+        }
+      });
+
     }, (error) => {
       console.error("Error fetching tasks:", error);
     });
@@ -99,7 +126,8 @@ export default function StudentDashboard() {
         dueDate: timestamp,
         priority: newTaskPriority,
         completed: false,
-        createdAt: Date.now()
+        createdAt: Date.now(),
+        overdueNotificationSent: false
       });
       setNewTaskTitle('');
       setNewTaskPriority('medium');
@@ -114,10 +142,24 @@ export default function StudentDashboard() {
 
   const toggleTask = async (task: Task) => {
     try {
+      const newStatus = !task.completed;
+      
       await updateDoc(doc(db, 'tasks', task.id), {
-        completed: !task.completed,
-        completedAt: !task.completed ? Date.now() : null
+        completed: newStatus,
+        completedAt: newStatus ? Date.now() : null
       });
+
+      // Send Notification to Admin when completing a task
+      if (newStatus) {
+        await addDoc(collection(db, 'notifications'), {
+          type: 'success',
+          message: `${userProfile?.displayName || 'A student'} completed "${task.title}"`,
+          createdAt: Date.now(),
+          read: false,
+          studentId: user?.uid
+        });
+      }
+
     } catch (error) {
       console.error(error);
     }
@@ -153,11 +195,15 @@ export default function StudentDashboard() {
           throw new Error("Invalid Date");
       }
       const timestamp = startOfDay(dateObj).getTime();
+      
+      // Reset notification flag if due date is changed to future
+      const isNowFuture = !isPast(timestamp) || isToday(timestamp);
 
       await updateDoc(doc(db, 'tasks', taskToEdit.id), {
         title: editTitle.trim(),
         dueDate: timestamp,
-        priority: editPriority
+        priority: editPriority,
+        overdueNotificationSent: isNowFuture ? false : taskToEdit.overdueNotificationSent
       });
       
       setEditModalOpen(false);

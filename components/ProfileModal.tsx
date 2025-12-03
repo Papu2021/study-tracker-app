@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, updateDoc, addDoc, collection } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Button } from './ui/Button';
 import { X, Grid, Mail, User, AlignLeft, Check, ChevronLeft } from 'lucide-react';
@@ -44,6 +44,16 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
         bio,
         photoURL: avatarUrl
       });
+
+      // Send Notification to Admin about Update
+      await addDoc(collection(db, 'notifications'), {
+        type: 'info',
+        message: `Student '${displayName}' updated their bio/profile.`,
+        createdAt: Date.now(),
+        read: false,
+        studentId: user.uid
+      });
+
       await refreshProfile();
       onClose();
     } catch (error) {

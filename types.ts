@@ -21,9 +21,19 @@ export interface Task {
   completed: boolean;
   completedAt?: number; // timestamp
   createdAt: number; // timestamp
+  overdueNotificationSent?: boolean; // Track if admin has been notified
 }
 
 export interface DailyStats {
   date: string; // YYYY-MM-DD
   count: number;
+}
+
+export interface AppNotification {
+  id: string;
+  type: 'info' | 'success' | 'warning';
+  message: string;
+  createdAt: number;
+  read: boolean;
+  studentId?: string;
 }
