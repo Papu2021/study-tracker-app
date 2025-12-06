@@ -5,7 +5,7 @@ import { collection, query, getDocs, setDoc, doc, onSnapshot, orderBy, limit, up
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import { db, firebaseConfig } from '../firebase'; 
-import { UserProfile, Task, AppNotification } from '../types';
+import { UserProfile, Task, AppNotification, Assessment } from '../types';
 import { ContributionGraph } from '../components/ContributionGraph';
 import { ConfirmationModal } from '../components/ui/ConfirmationModal';
 import { ProfileModal } from '../components/ProfileModal';
@@ -17,7 +17,7 @@ import {
   Users, CheckCircle2, LayoutDashboard, AlertCircle, 
   RefreshCcw, ShieldAlert, Bell, Filter, 
   ListTodo, Activity, FileSpreadsheet, ChevronLeft, ChevronRight, X, UserPlus, Download,
-  Eye, EyeOff, Clock, Sparkles, BarChart3, Calendar, Check, FileDown, Info
+  Eye, EyeOff, Clock, Sparkles, BarChart3, Calendar, Check, FileDown, Info, BrainCircuit, Target
 } from 'lucide-react';
 import { subDays, format, isSameDay, startOfMonth, endOfMonth, eachDayOfInterval, getDate, isPast, startOfDay, isToday, startOfWeek, endOfWeek, formatDistanceToNow } from 'date-fns';
 
@@ -163,6 +163,7 @@ export default function AdminDashboard() {
   // Data State
   const [students, setStudents] = useState<UserProfile[]>([]);
   const [selectedStudent, setSelectedStudent] = useState<UserProfile | null>(null);
+  const [studentAssessment, setStudentAssessment] = useState<Assessment | null>(null);
   const [allTasks, setAllTasks] = useState<Task[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   
@@ -201,6 +202,30 @@ export default function AdminDashboard() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  // Fetch Assessment when a student is selected
+  useEffect(() => {
+    if (!selectedStudent) {
+        setStudentAssessment(null);
+        return;
+    }
+    
+    // Only fetch if they have completed it (optimization) or just try fetching
+    const fetchAssessment = async () => {
+        try {
+            const q = query(collection(db, 'assessments'), where('userId', '==', selectedStudent.uid), limit(1));
+            const snapshot = await getDocs(q);
+            if (!snapshot.empty) {
+                setStudentAssessment({ id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as Assessment);
+            } else {
+                setStudentAssessment(null);
+            }
+        } catch (e) {
+            console.error("Failed to fetch assessment", e);
+        }
+    };
+    fetchAssessment();
+  }, [selectedStudent]);
 
   // Click Outside to Close Notifications
   useEffect(() => {
@@ -796,7 +821,14 @@ export default function AdminDashboard() {
                              <div className="flex items-center gap-3">
                                 <img src={student.photoURL} alt="" className="w-10 h-10 rounded-full bg-slate-100 border border-slate-200 dark:border-slate-700 object-cover" />
                                 <div>
-                                   <p className="font-bold text-slate-900 dark:text-white group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">{student.displayName}</p>
+                                   <div className="flex items-center gap-2">
+                                     <p className="font-bold text-slate-900 dark:text-white group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">{student.displayName}</p>
+                                     {student.assessmentCompleted && (
+                                       <div className="bg-brand-50 dark:bg-brand-900/20 p-0.5 rounded-full" title="Assessment Completed">
+                                         <BrainCircuit className="w-3 h-3 text-brand-600 dark:text-brand-400" />
+                                       </div>
+                                     )}
+                                   </div>
                                    <p className="text-xs text-slate-500">{student.email}</p>
                                 </div>
                              </div>
@@ -876,6 +908,11 @@ export default function AdminDashboard() {
                     <p className="text-slate-500 dark:text-slate-400 flex items-center gap-2 text-sm">
                       <span className="bg-slate-200 dark:bg-slate-700 px-2 py-0.5 rounded text-xs font-bold uppercase">{selectedStudent.role}</span>
                       <span>{selectedStudent.email}</span>
+                      {selectedStudent.assessmentCompleted && (
+                          <span className="text-brand-600 bg-brand-50 dark:text-brand-400 dark:bg-brand-900/30 px-2 py-0.5 rounded text-xs font-bold uppercase flex items-center gap-1">
+                             <BrainCircuit className="w-3 h-3" /> Assessed
+                          </span>
+                      )}
                     </p>
                   </div>
                </div>
@@ -912,6 +949,127 @@ export default function AdminDashboard() {
                         </p>
                      </div>
                   </div>
+
+                  {/* --- ASSESSMENT SECTION --- */}
+                  {studentAssessment ? (
+                      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+                          <div className="p-4 border-b border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/80 flex items-center justify-between">
+                             <h3 className="font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                                <BrainCircuit className="w-5 h-5 text-purple-500" /> Educational Assessment Results
+                             </h3>
+                             <span className="text-xs text-slate-400">Submitted {safeFormat(studentAssessment.submittedAt, 'MMM d, yyyy')}</span>
+                          </div>
+                          
+                          <div className="p-6">
+                            {studentAssessment.responses ? (
+                                // New Dynamic Format - Vertically Stacked
+                                <div className="space-y-10">
+                                    {/* Study Habits */}
+                                    <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-6 border border-slate-100 dark:border-slate-700">
+                                        <h4 className="font-bold text-base text-slate-800 dark:text-white uppercase tracking-wide mb-6 flex items-center gap-2 border-b border-slate-200 dark:border-slate-700 pb-3">
+                                            <Clock className="w-5 h-5 text-brand-600" /> Study Habits Analysis
+                                        </h4>
+                                        <div className="grid grid-cols-1 gap-6">
+                                            {studentAssessment.responses.filter(r => r.category === 'Study Habits').map((r, i) => (
+                                                <div key={i} className="text-sm bg-white dark:bg-slate-900 p-4 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm">
+                                                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                                                        <div className="flex gap-3">
+                                                            <span className="text-slate-400 font-bold text-xs mt-0.5">Q{i+1}</span>
+                                                            <p className="text-slate-600 dark:text-slate-300 leading-relaxed font-medium">{r.question}</p>
+                                                        </div>
+                                                        <div className="shrink-0">
+                                                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold border ${
+                                                                r.answer === 'Yes Consistently' ? 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-900' :
+                                                                r.answer === 'Often' ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-900' :
+                                                                'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'
+                                                            }`}>
+                                                                {r.answer}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* Personality Traits */}
+                                    <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-6 border border-slate-100 dark:border-slate-700">
+                                        <h4 className="font-bold text-base text-slate-800 dark:text-white uppercase tracking-wide mb-6 flex items-center gap-2 border-b border-slate-200 dark:border-slate-700 pb-3">
+                                            <Target className="w-5 h-5 text-purple-600" /> Personality Profile
+                                        </h4>
+                                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                            {studentAssessment.responses.filter(r => r.category === 'Personality').map((r, i) => (
+                                                <div key={i} className="text-sm bg-white dark:bg-slate-900 p-4 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-between">
+                                                    <div className="mb-3">
+                                                      <div className="flex items-center justify-between mb-2">
+                                                        {r.label && (
+                                                            <span className="inline-block text-[10px] font-bold uppercase bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 px-2 py-0.5 rounded">
+                                                            {r.label}
+                                                            </span>
+                                                        )}
+                                                      </div>
+                                                      <p className="text-slate-500 dark:text-slate-400 leading-relaxed text-xs">
+                                                        {r.question}
+                                                      </p>
+                                                    </div>
+                                                    <div className="mt-2 pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
+                                                        <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Response</span>
+                                                        <span className={`font-bold ${
+                                                            r.answer === 'Yes Consistently' ? 'text-purple-600 dark:text-purple-400' :
+                                                            r.answer === 'Often' ? 'text-blue-600 dark:text-blue-400' :
+                                                            'text-slate-500'
+                                                        }`}>
+                                                            {r.answer}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                // Backward Compatibility for Old Format
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                    <div>
+                                        <h4 className="font-bold text-sm text-slate-400 uppercase tracking-wide mb-3 flex items-center gap-2">
+                                            <Clock className="w-4 h-4" /> Study Habits
+                                        </h4>
+                                        <ul className="space-y-3 text-sm">
+                                            <li className="flex justify-between border-b border-slate-100 dark:border-slate-700 pb-2">
+                                                <span className="text-slate-500">Daily Hours:</span>
+                                                <span className="font-medium dark:text-white">{studentAssessment.studyHabits?.averageHours} hrs</span>
+                                            </li>
+                                            <li className="flex justify-between border-b border-slate-100 dark:border-slate-700 pb-2">
+                                                <span className="text-slate-500">Preferred Time:</span>
+                                                <span className="font-medium dark:text-white">{studentAssessment.studyHabits?.preferredTime}</span>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                    <div>
+                                        <h4 className="font-bold text-sm text-slate-400 uppercase tracking-wide mb-3 flex items-center gap-2">
+                                            <Target className="w-4 h-4" /> Personality
+                                        </h4>
+                                        <ul className="space-y-3 text-sm">
+                                            <li className="flex justify-between border-b border-slate-100 dark:border-slate-700 pb-2">
+                                                <span className="text-slate-500">Type:</span>
+                                                <span className="font-medium dark:text-white">{studentAssessment.personality?.type}</span>
+                                            </li>
+                                            <li className="flex justify-between border-b border-slate-100 dark:border-slate-700 pb-2">
+                                                <span className="text-slate-500">Learning Style:</span>
+                                                <span className="font-medium dark:text-white">{studentAssessment.personality?.learningStyle}</span>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            )}
+                          </div>
+                      </div>
+                  ) : (
+                      <div className="bg-slate-100 dark:bg-slate-800/50 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 p-6 text-center">
+                          <BrainCircuit className="w-8 h-8 text-slate-400 mx-auto mb-2" />
+                          <p className="text-slate-500 text-sm">No educational assessment submitted yet.</p>
+                      </div>
+                  )}
 
                   {/* Graphs */}
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

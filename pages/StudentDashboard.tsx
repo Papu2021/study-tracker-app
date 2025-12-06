@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -7,12 +8,14 @@ import { Task } from '../types';
 import { ContributionGraph } from '../components/ContributionGraph';
 import { ProfileModal } from '../components/ProfileModal';
 import { ConfirmationModal } from '../components/ui/ConfirmationModal';
+import { AssessmentModal } from '../components/AssessmentModal';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { 
   LogOut, Moon, Sun, Plus, CheckCircle2, Circle, 
   Trash2, Calendar, Layout, Clock, Pencil, X,
-  Flag, Zap, Trophy, Target, Flame, Coffee, History
+  Flag, Zap, Trophy, Target, Flame, Coffee, History,
+  BrainCircuit
 } from 'lucide-react';
 import { format, isToday, isFuture, isPast, startOfDay, parseISO } from 'date-fns';
 
@@ -26,6 +29,7 @@ export default function StudentDashboard() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [logoutModalOpen, setLogoutModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
+  const [showAssessmentModal, setShowAssessmentModal] = useState(false);
   
   // Task Actions State
   const [taskToDelete, setTaskToDelete] = useState<string | null>(null);
@@ -289,6 +293,38 @@ export default function StudentDashboard() {
 
       <main className="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1">
         
+        {/* --- Assessment Banner (Always Visible) --- */}
+        <div className="mb-8 bg-gradient-to-r from-brand-600 to-indigo-600 rounded-xl p-6 shadow-lg text-white flex flex-col sm:flex-row items-center justify-between gap-4 animate-in fade-in slide-in-from-top-4">
+            <div className="flex items-center gap-4">
+              <div className="bg-white/20 p-3 rounded-full backdrop-blur-sm">
+                <BrainCircuit className="w-8 h-8 text-white" />
+              </div>
+              <div>
+                {userProfile?.assessmentCompleted ? (
+                  <>
+                    <h3 className="font-bold text-xl">Assess your study and your personality with this yes/no questions</h3>
+                    {/* <p className="text-brand-100 text-sm opacity-90">
+                      Update your assessment to monitor improvements in your study habits.
+                    </p> */}
+                  </>
+                ) : (
+                  <>
+                    <h3 className="font-bold text-xl">Action Required: Setup Your Profile</h3>
+                    <p className="text-brand-100 text-sm opacity-90">
+                      Complete the personality and study habits assessment to personalize your experience.
+                    </p>
+                  </>
+                )}
+              </div>
+            </div>
+            <Button 
+              onClick={() => setShowAssessmentModal(true)} 
+              className="bg-white text-brand-700 hover:bg-slate-100 hover:text-brand-800 border-none whitespace-nowrap shadow-sm font-bold"
+            >
+              {userProfile?.assessmentCompleted ? 'Retake Assessment' : 'Start Assessment'}
+            </Button>
+        </div>
+
         {/* --- Greeting Section --- */}
         <div className="mb-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
            <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
@@ -690,6 +726,9 @@ export default function StudentDashboard() {
       />
 
       <ProfileModal isOpen={showProfileModal} onClose={() => setShowProfileModal(false)} />
+      
+      {/* Assessment Modal */}
+      <AssessmentModal isOpen={showAssessmentModal} onClose={() => setShowAssessmentModal(false)}/>
     </div>
   );
 }
