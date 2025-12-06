@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { doc, updateDoc, addDoc, collection } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Button } from './ui/Button';
-import { X, Grid, Mail, User, AlignLeft, Check, ChevronLeft } from 'lucide-react';
+import { X, Grid, Mail, User, AlignLeft, Check, ChevronLeft, Hash } from 'lucide-react';
 
 interface ProfileModalProps {
   isOpen: boolean;
@@ -163,6 +163,23 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     />
                   </div>
                 </div>
+
+                {userProfile.studentId && (
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5 ml-1">
+                      Student ID
+                    </label>
+                    <div className="relative">
+                      <Hash className="absolute left-3 top-2.5 w-5 h-5 text-slate-400" />
+                      <input 
+                        type="text"
+                        value={userProfile.studentId}
+                        disabled
+                        className="w-full pl-10 pr-3 py-2 border border-slate-200 bg-slate-50 text-slate-500 rounded-lg dark:bg-slate-800 dark:border-slate-700 dark:text-slate-500 cursor-not-allowed font-mono font-medium"
+                      />
+                    </div>
+                  </div>
+                )}
 
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5 ml-1">

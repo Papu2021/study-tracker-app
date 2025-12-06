@@ -12,6 +12,7 @@ export interface UserProfile {
   createdAt: number;
   requiresPasswordChange?: boolean;
   assessmentCompleted?: boolean; // Track if they finished the assessment
+  studentId?: string; // e.g. DSV0001
 }
 
 export interface Task {

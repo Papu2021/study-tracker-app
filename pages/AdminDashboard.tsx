@@ -1,7 +1,8 @@
+
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
-import { collection, query, getDocs, setDoc, doc, onSnapshot, orderBy, limit, updateDoc, where } from 'firebase/firestore';
+import { collection, query, getDocs, setDoc, doc, onSnapshot, orderBy, limit, updateDoc, where, runTransaction, getDoc } from 'firebase/firestore';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import { db, firebaseConfig } from '../firebase'; 
@@ -17,7 +18,8 @@ import {
   Users, CheckCircle2, LayoutDashboard, AlertCircle, 
   RefreshCcw, ShieldAlert, Bell, Filter, 
   ListTodo, Activity, FileSpreadsheet, ChevronLeft, ChevronRight, X, UserPlus, Download,
-  Eye, EyeOff, Clock, Sparkles, BarChart3, Calendar, Check, FileDown, Info, BrainCircuit, Target
+  Eye, EyeOff, Clock, Sparkles, BarChart3, Calendar, Check, FileDown, Info, BrainCircuit, Target,
+  Hash
 } from 'lucide-react';
 import { subDays, format, isSameDay, startOfMonth, endOfMonth, eachDayOfInterval, getDate, isPast, startOfDay, isToday, startOfWeek, endOfWeek, formatDistanceToNow } from 'date-fns';
 
@@ -187,6 +189,7 @@ export default function AdminDashboard() {
   const [isCreatingUser, setIsCreatingUser] = useState(false);
   const [createUserError, setCreateUserError] = useState('');
   const [createUserSuccess, setCreateUserSuccess] = useState('');
+  const [projectedId, setProjectedId] = useState('Loading...');
   
   // Filters & Sorting
   const [searchQuery, setSearchQuery] = useState('');
@@ -256,6 +259,30 @@ export default function AdminDashboard() {
     return () => unsubscribe();
   }, []);
 
+  // Fetch projected ID when opening Add User modal
+  useEffect(() => {
+    if (showAddUserModal) {
+      fetchProjectedId();
+    }
+  }, [showAddUserModal]);
+
+  const fetchProjectedId = async () => {
+    try {
+      setProjectedId("Loading...");
+      const docRef = doc(db, 'system', 'counters');
+      const docSnap = await getDoc(docRef);
+      let currentCount = 0;
+      if (docSnap.exists()) {
+        currentCount = docSnap.data().studentCount || 0;
+      }
+      const nextCount = currentCount + 1;
+      setProjectedId(`DSV${nextCount.toString().padStart(4, '0')}`);
+    } catch (e) {
+      console.error("Failed to fetch projected ID", e);
+      setProjectedId("DSV????");
+    }
+  };
+
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -323,6 +350,22 @@ export default function AdminDashboard() {
 
     let secondaryApp: any;
     try {
+      // Generate unique Student ID atomically
+      const studentId = await runTransaction(db, async (transaction) => {
+         const counterRef = doc(db, 'system', 'counters');
+         const counterDoc = await transaction.get(counterRef);
+         
+         let newCount = 1;
+         if (counterDoc.exists()) {
+             newCount = (counterDoc.data().studentCount || 0) + 1;
+         }
+         
+         // Update the counter
+         transaction.set(counterRef, { studentCount: newCount }, { merge: true });
+         
+         return `DSV${newCount.toString().padStart(4, '0')}`;
+      });
+
       // Initialize secondary app to create user without logging out admin
       if (getApps().some(app => app.name === "SecondaryApp")) {
         secondaryApp = getApp("SecondaryApp");
@@ -340,6 +383,7 @@ export default function AdminDashboard() {
         displayName: newUserName,
         photoURL: `https://api.dicebear.com/7.x/avataaars/svg?seed=${newUser.uid}`,
         role: newUserRole,
+        studentId: newUserRole === 'STUDENT' ? studentId : undefined,
         bio: newUserRole === 'ADMIN' ? 'Administrator' : 'Student',
         createdAt: Date.now(),
         requiresPasswordChange: true 
@@ -347,7 +391,7 @@ export default function AdminDashboard() {
       
       await signOut(secondaryAuth);
       
-      setCreateUserSuccess(`New ${newUserRole.toLowerCase()} account created successfully!`);
+      setCreateUserSuccess(`New ${newUserRole.toLowerCase()} account created successfully! ID: ${studentId}`);
       
       // Reset Form
       setNewUserEmail('');
@@ -373,7 +417,7 @@ export default function AdminDashboard() {
   };
 
   const handleExportCSV = (type: StudentFilterType) => {
-     const headers = ["Name,Email,Role,Joined Date,Total Tasks,Completed Tasks,Pending Tasks,Overdue Tasks,Completion Rate (%)"];
+     const headers = ["ID,Name,Email,Role,Joined Date,Total Tasks,Completed Tasks,Pending Tasks,Overdue Tasks,Completion Rate (%)"];
      
      let filteredData = students.filter(s => s.role === 'STUDENT');
 
@@ -399,7 +443,7 @@ export default function AdminDashboard() {
         
         const joinedDate = safeFormat(s.createdAt, 'yyyy-MM-dd');
         
-        return `"${s.displayName}","${s.email}","${s.role}","${joinedDate}",${total},${completed},${pending},${overdue},${rate}`;
+        return `"${s.studentId || ''}","${s.displayName}","${s.email}","${s.role}","${joinedDate}",${total},${completed},${pending},${overdue},${rate}`;
      });
      
      const csvContent = "data:text/csv;charset=utf-8," + [headers, ...rows].join("\n");
@@ -419,7 +463,8 @@ export default function AdminDashboard() {
   const filteredStudents = useMemo(() => {
     return students.filter(student => {
       const matchesSearch = student.displayName.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                            student.email.toLowerCase().includes(searchQuery.toLowerCase());
+                            student.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                            (student.studentId || '').toLowerCase().includes(searchQuery.toLowerCase());
       
       let matchesStatus = true;
       if (studentFilter === 'active') {
@@ -829,7 +874,14 @@ export default function AdminDashboard() {
                                        </div>
                                      )}
                                    </div>
-                                   <p className="text-xs text-slate-500">{student.email}</p>
+                                   <div className="flex items-center gap-2">
+                                     <p className="text-xs text-slate-500">{student.email}</p>
+                                     {student.studentId && (
+                                       <span className="text-[10px] font-mono font-bold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-1.5 py-0.5 rounded">
+                                         {student.studentId}
+                                       </span>
+                                     )}
+                                   </div>
                                 </div>
                              </div>
                            </td>
@@ -908,6 +960,11 @@ export default function AdminDashboard() {
                     <p className="text-slate-500 dark:text-slate-400 flex items-center gap-2 text-sm">
                       <span className="bg-slate-200 dark:bg-slate-700 px-2 py-0.5 rounded text-xs font-bold uppercase">{selectedStudent.role}</span>
                       <span>{selectedStudent.email}</span>
+                      {selectedStudent.studentId && (
+                        <span className="font-mono bg-brand-100 text-brand-700 dark:bg-brand-900/40 dark:text-brand-300 px-2 py-0.5 rounded text-xs font-bold">
+                          {selectedStudent.studentId}
+                        </span>
+                      )}
                       {selectedStudent.assessmentCompleted && (
                           <span className="text-brand-600 bg-brand-50 dark:text-brand-400 dark:bg-brand-900/30 px-2 py-0.5 rounded text-xs font-bold uppercase flex items-center gap-1">
                              <BrainCircuit className="w-3 h-3" /> Assessed
@@ -1178,6 +1235,19 @@ export default function AdminDashboard() {
                      )}
                      
                      <div className="space-y-4">
+                        {/* Student ID Display (Disabled) */}
+                        {newUserRole === 'STUDENT' && (
+                          <div className="bg-slate-50 dark:bg-slate-900/50 p-3 rounded-lg border border-slate-200 dark:border-slate-700 flex justify-between items-center">
+                             <div className="flex items-center gap-2 text-slate-500">
+                                <Hash className="w-4 h-4" />
+                                <span className="text-xs font-bold uppercase">Student ID</span>
+                             </div>
+                             <span className="font-mono font-bold text-slate-700 dark:text-slate-200">
+                                {projectedId}
+                             </span>
+                          </div>
+                        )}
+
                         <Input 
                           label="Full Name" 
                           placeholder="e.g. John Doe"

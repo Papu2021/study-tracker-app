@@ -15,7 +15,7 @@ import {
   LogOut, Moon, Sun, Plus, CheckCircle2, Circle, 
   Trash2, Calendar, Layout, Clock, Pencil, X,
   Flag, Zap, Trophy, Target, Flame, Coffee, History,
-  BrainCircuit
+  BrainCircuit, Hash
 } from 'lucide-react';
 import { format, isToday, isFuture, isPast, startOfDay, parseISO } from 'date-fns';
 
@@ -278,9 +278,16 @@ export default function StudentDashboard() {
                       alt="User" 
                       className="w-8 h-8 rounded-full bg-slate-200 border border-slate-200 dark:border-slate-700 object-cover" 
                     />
-                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300 hidden sm:block">
-                      {userProfile?.displayName || user?.email?.split('@')[0]}
-                    </span>
+                    <div className="hidden sm:block text-left">
+                       <span className="text-sm font-medium text-slate-700 dark:text-slate-300 block leading-tight">
+                         {userProfile?.displayName || user?.email?.split('@')[0]}
+                       </span>
+                       {userProfile?.studentId && (
+                         <span className="text-[10px] text-slate-400 font-mono block">
+                            {userProfile.studentId}
+                         </span>
+                       )}
+                    </div>
                   </button>
                   <button onClick={() => setLogoutModalOpen(true)} className="p-2 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-full transition-all" title="Logout">
                     <LogOut className="w-5 h-5" />
@@ -302,16 +309,16 @@ export default function StudentDashboard() {
               <div>
                 {userProfile?.assessmentCompleted ? (
                   <>
-                    <h3 className="font-bold text-xl">Assess your study and your personality with this yes/no questions</h3>
-                    {/* <p className="text-brand-100 text-sm opacity-90">
+                    <h3 className="font-bold text-xl">Track Your Growth</h3>
+                    <p className="text-brand-100 text-sm opacity-90">
                       Update your assessment to monitor improvements in your study habits.
-                    </p> */}
+                    </p>
                   </>
                 ) : (
                   <>
                     <h3 className="font-bold text-xl">Action Required: Setup Your Profile</h3>
                     <p className="text-brand-100 text-sm opacity-90">
-                      Complete the personality and study habits assessment to personalize your experience.
+                      Assess your study and your personality with this yes/no questions
                     </p>
                   </>
                 )}
@@ -327,11 +334,19 @@ export default function StudentDashboard() {
 
         {/* --- Greeting Section --- */}
         <div className="mb-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-           <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
-             Hello, {firstName}! 👋
-           </h1>
-           <p className="text-slate-500 dark:text-slate-400 mt-2 text-lg">
-             Ready to focus? Here is your progress overview.
+           <div className="flex items-center gap-3 mb-2">
+             <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
+               Hello, {firstName}! 👋
+             </h1>
+             {userProfile?.studentId && (
+                <span className="animate-in zoom-in duration-300 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-bold font-mono bg-brand-100 text-brand-700 dark:bg-brand-900/30 dark:text-brand-300 border border-brand-200 dark:border-brand-700/50 shadow-sm">
+                  <Hash className="w-3.5 h-3.5 opacity-70" />
+                  {userProfile.studentId}
+                </span>
+             )}
+           </div>
+           <p className="text-slate-500 dark:text-slate-400 text-lg">
+             Ready to focus? Here is your progress overview, A Doctor always follows your progress...
            </p>
         </div>
 
@@ -728,7 +743,7 @@ export default function StudentDashboard() {
       <ProfileModal isOpen={showProfileModal} onClose={() => setShowProfileModal(false)} />
       
       {/* Assessment Modal */}
-      <AssessmentModal isOpen={showAssessmentModal} onClose={() => setShowAssessmentModal(false)}/>
+      <AssessmentModal isOpen={showAssessmentModal} onClose={() => setShowAssessmentModal(false)} />
     </div>
   );
 }
