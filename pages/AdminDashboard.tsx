@@ -12,6 +12,7 @@ import { ConfirmationModal } from '../components/ui/ConfirmationModal';
 import { ProfileModal } from '../components/ProfileModal';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
+import { Pagination } from '../components/ui/Pagination';
 import { 
   LogOut, Moon, Sun, ShieldCheck, Search, 
   User as UserIcon, XCircle, TrendingUp, 
@@ -28,6 +29,10 @@ type SortOption = 'name' | 'consistency' | 'overdue' | 'completion';
 type TabView = 'overview' | 'tasks' | 'students';
 type ChartRange = 'week' | 'month';
 type StudentFilterType = 'all' | 'active' | 'pending';
+
+// --- Constants ---
+const ITEMS_PER_PAGE = 10;
+const INSPECTION_ITEMS_PER_PAGE = 5;
 
 // --- Helper: Safe Date Formatting ---
 const safeFormat = (dateInput: number | Date | undefined, formatStr: string) => {
@@ -169,6 +174,11 @@ export default function AdminDashboard() {
   const [allTasks, setAllTasks] = useState<Task[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   
+  // Pagination State
+  const [studentPage, setStudentPage] = useState(1);
+  const [taskPage, setTaskPage] = useState(1);
+  const [inspectionPage, setInspectionPage] = useState(1);
+  
   // UI State
   const [loading, setLoading] = useState(false);
   const [logoutModalOpen, setLogoutModalOpen] = useState(false);
@@ -210,6 +220,7 @@ export default function AdminDashboard() {
   useEffect(() => {
     if (!selectedStudent) {
         setStudentAssessment(null);
+        setInspectionPage(1); // Reset pagination
         return;
     }
     
@@ -266,6 +277,15 @@ export default function AdminDashboard() {
     }
   }, [showAddUserModal]);
 
+  // Reset pagination when search/filter changes
+  useEffect(() => {
+    setStudentPage(1);
+  }, [searchQuery, studentFilter]);
+
+  useEffect(() => {
+    setTaskPage(1);
+  }, [searchQuery]);
+
   const fetchProjectedId = async () => {
     try {
       setProjectedId("Loading...");
@@ -286,10 +306,9 @@ export default function AdminDashboard() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      // Fetch All Users (to show both students and admins in directory if needed, but currently mostly managing students)
+      // Fetch All Users
       const usersQ = query(collection(db, 'users'));
       const usersSnapshot = await getDocs(usersQ);
-      // Filter primarily for students for the main list, but keep admins for reference if needed
       const allUsers = usersSnapshot.docs.map(doc => doc.data() as UserProfile);
       
       // Sort by newest registered first
@@ -476,6 +495,32 @@ export default function AdminDashboard() {
       return matchesSearch && matchesStatus;
     });
   }, [students, searchQuery, studentFilter]);
+  
+  // Paginated Students
+  const paginatedStudents = useMemo(() => {
+    const startIndex = (studentPage - 1) * ITEMS_PER_PAGE;
+    return filteredStudents.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [filteredStudents, studentPage]);
+  
+  const totalStudentPages = Math.ceil(filteredStudents.length / ITEMS_PER_PAGE);
+
+  // Filter Tasks
+  const filteredTasks = useMemo(() => {
+    return allTasks.filter(task => {
+        const studentName = getStudentName(task.userId).toLowerCase();
+        const taskTitle = task.title.toLowerCase();
+        const query = searchQuery.toLowerCase();
+        return studentName.includes(query) || taskTitle.includes(query);
+    });
+  }, [allTasks, searchQuery, students]); // added students to dependency to ensure names are ready
+
+  // Paginated Tasks
+  const paginatedTasks = useMemo(() => {
+    const startIndex = (taskPage - 1) * ITEMS_PER_PAGE;
+    return filteredTasks.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [filteredTasks, taskPage]);
+
+  const totalTaskPages = Math.ceil(filteredTasks.length / ITEMS_PER_PAGE);
 
   const handleTabChange = (tab: TabView) => {
     setActiveTab(tab);
@@ -490,6 +535,14 @@ export default function AdminDashboard() {
       .filter(t => t.userId === selectedStudent.uid)
       .sort((a,b) => a.dueDate - b.dueDate);
   }, [allTasks, selectedStudent]);
+  
+  // Paginated Inspection Tasks
+  const paginatedInspectionTasks = useMemo(() => {
+    const startIndex = (inspectionPage - 1) * INSPECTION_ITEMS_PER_PAGE;
+    return selectedStudentTasks.slice(startIndex, startIndex + INSPECTION_ITEMS_PER_PAGE);
+  }, [selectedStudentTasks, inspectionPage]);
+  
+  const totalInspectionPages = Math.ceil(selectedStudentTasks.length / INSPECTION_ITEMS_PER_PAGE);
 
   // System Wide Stats
   const systemTotalTasks = allTasks.length;
@@ -743,7 +796,7 @@ export default function AdminDashboard() {
                
                <div className="flex items-center gap-3">
                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">
-                    {allTasks.length} Tasks
+                    {filteredTasks.length} Found
                  </span>
                </div>
             </div>
@@ -760,12 +813,7 @@ export default function AdminDashboard() {
                     </tr>
                  </thead>
                  <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                    {allTasks.filter(task => {
-                        const studentName = getStudentName(task.userId).toLowerCase();
-                        const taskTitle = task.title.toLowerCase();
-                        const query = searchQuery.toLowerCase();
-                        return studentName.includes(query) || taskTitle.includes(query);
-                    }).slice(0, 50).map((task) => (
+                    {paginatedTasks.map((task) => (
                         <tr key={task.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                            <td className="px-6 py-4 font-medium text-slate-900 dark:text-white max-w-xs truncate">
                              {task.title}
@@ -802,10 +850,17 @@ export default function AdminDashboard() {
                     ))}
                  </tbody>
               </table>
-              {allTasks.length === 0 && (
+              {filteredTasks.length === 0 && (
                  <div className="p-8 text-center text-slate-500">No tasks found.</div>
               )}
             </div>
+            
+            {/* Pagination */}
+            <Pagination 
+              currentPage={taskPage}
+              totalPages={totalTaskPages}
+              onPageChange={setTaskPage}
+            />
           </div>
         )}
 
@@ -855,8 +910,8 @@ export default function AdminDashboard() {
                     </tr>
                  </thead>
                  <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                    {filteredStudents.length > 0 ? (
-                      filteredStudents.map((student) => (
+                    {paginatedStudents.length > 0 ? (
+                      paginatedStudents.map((student) => (
                         <tr 
                           key={student.uid} 
                           onClick={() => setSelectedStudent(student)}
@@ -926,6 +981,13 @@ export default function AdminDashboard() {
                  </tbody>
               </table>
             </div>
+
+            {/* Pagination */}
+            <Pagination 
+              currentPage={studentPage}
+              totalPages={totalStudentPages}
+              onPageChange={setStudentPage}
+            />
           </div>
         )}
       </main>
@@ -1155,11 +1217,16 @@ export default function AdminDashboard() {
 
                   {/* Task List */}
                   <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
-                     <div className="p-4 border-b border-slate-100 dark:border-slate-700 font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                        <ListTodo className="w-5 h-5 text-slate-400" />
-                        Task History
+                     <div className="p-4 border-b border-slate-100 dark:border-slate-700 font-bold text-slate-800 dark:text-white flex items-center gap-2 justify-between">
+                        <div className="flex items-center gap-2">
+                            <ListTodo className="w-5 h-5 text-slate-400" />
+                            Task History
+                        </div>
+                        <span className="text-xs font-normal text-slate-400">
+                            {selectedStudentTasks.length} Total
+                        </span>
                      </div>
-                     <div className="max-h-[300px] overflow-y-auto">
+                     <div className="overflow-x-auto">
                         <table className="w-full text-left text-sm">
                            <thead className="bg-slate-50 dark:bg-slate-900 text-slate-500 text-xs uppercase sticky top-0">
                               <tr>
@@ -1169,7 +1236,7 @@ export default function AdminDashboard() {
                               </tr>
                            </thead>
                            <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                              {selectedStudentTasks.map(task => (
+                              {paginatedInspectionTasks.map(task => (
                                  <tr key={task.id}>
                                     <td className="px-6 py-3 font-medium text-slate-900 dark:text-white truncate max-w-xs">{task.title}</td>
                                     <td className="px-6 py-3 text-slate-500">{safeFormat(task.dueDate, 'MMM d, yyyy')}</td>
@@ -1190,6 +1257,11 @@ export default function AdminDashboard() {
                            </tbody>
                         </table>
                      </div>
+                     <Pagination 
+                        currentPage={inspectionPage}
+                        totalPages={totalInspectionPages}
+                        onPageChange={setInspectionPage}
+                     />
                   </div>
                </div>
             </div>

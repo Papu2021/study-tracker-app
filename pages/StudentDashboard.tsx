@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { collection, query, where, onSnapshot, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
@@ -11,6 +11,7 @@ import { ConfirmationModal } from '../components/ui/ConfirmationModal';
 import { AssessmentModal } from '../components/AssessmentModal';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
+import { Pagination } from '../components/ui/Pagination';
 import { 
   LogOut, Moon, Sun, Plus, CheckCircle2, Circle, 
   Trash2, Calendar, Layout, Clock, Pencil, X,
@@ -18,6 +19,10 @@ import {
   BrainCircuit, Hash
 } from 'lucide-react';
 import { format, isToday, isFuture, isPast, startOfDay, parseISO } from 'date-fns';
+
+// Constants
+const ACTIVE_TASKS_PER_PAGE = 5;
+const HISTORY_TASKS_PER_PAGE = 10;
 
 export default function StudentDashboard() {
   const { user, userProfile, logout } = useAuth();
@@ -46,6 +51,10 @@ export default function StudentDashboard() {
   const [editDate, setEditDate] = useState('');
   const [editPriority, setEditPriority] = useState<'high' | 'medium' | 'low'>('medium');
   const [isSavingEdit, setIsSavingEdit] = useState(false);
+  
+  // Pagination State
+  const [activeTaskPage, setActiveTaskPage] = useState(1);
+  const [historyPage, setHistoryPage] = useState(1);
 
   // Get First Name for Greeting
   const firstName = userProfile?.displayName?.split(' ')[0] || 'Student';
@@ -136,6 +145,9 @@ export default function StudentDashboard() {
       setNewTaskTitle('');
       setNewTaskPriority('medium');
       setNewTaskDate(format(new Date(), 'yyyy-MM-dd'));
+      
+      // Reset to first page so user sees new task
+      setActiveTaskPage(1);
     } catch (error) {
       console.error("Error adding task:", error);
       alert("Failed to add task. Please check your internet connection.");
@@ -240,6 +252,23 @@ export default function StudentDashboard() {
   const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
   const highPriorityPending = tasks.filter(t => !t.completed && t.priority === 'high').length;
   const tasksCompletedToday = tasks.filter(t => t.completed && t.completedAt && isToday(new Date(t.completedAt))).length;
+  
+  // --- Pagination Logic ---
+  const activeTasksList = useMemo(() => tasks.filter(t => !t.completed), [tasks]);
+  const historyTasksList = useMemo(() => tasks.filter(t => t.completed).sort((a,b) => (b.completedAt || 0) - (a.completedAt || 0)), [tasks]);
+
+  const paginatedActiveTasks = useMemo(() => {
+    const startIndex = (activeTaskPage - 1) * ACTIVE_TASKS_PER_PAGE;
+    return activeTasksList.slice(startIndex, startIndex + ACTIVE_TASKS_PER_PAGE);
+  }, [activeTasksList, activeTaskPage]);
+
+  const paginatedHistoryTasks = useMemo(() => {
+    const startIndex = (historyPage - 1) * HISTORY_TASKS_PER_PAGE;
+    return historyTasksList.slice(startIndex, startIndex + HISTORY_TASKS_PER_PAGE);
+  }, [historyTasksList, historyPage]);
+
+  const totalActivePages = Math.ceil(activeTasksList.length / ACTIVE_TASKS_PER_PAGE);
+  const totalHistoryPages = Math.ceil(historyTasksList.length / HISTORY_TASKS_PER_PAGE);
 
   // --- UI Helpers ---
   const getPriorityBorder = (p?: string) => {
@@ -311,7 +340,7 @@ export default function StudentDashboard() {
                   <>
                     <h3 className="font-bold text-xl">Track Your Growth</h3>
                     <p className="text-brand-100 text-sm opacity-90">
-                      Update your assessment to monitor improvements in your study habits.
+                      Assess your study and your personality with this yes/no questions
                     </p>
                   </>
                 ) : (
@@ -516,13 +545,13 @@ export default function StudentDashboard() {
                     Up Next
                   </h2>
                   <span className="bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-bold px-3 py-1 rounded-full">
-                      {tasks.filter(t => !t.completed).length} Tasks
+                      {activeTasksList.length} Tasks
                   </span>
                 </div>
                 
                 <div className="p-6 flex-1 bg-slate-50/30 dark:bg-slate-900/20">
                   <div className="space-y-3">
-                    {tasks.filter(t => !t.completed).length === 0 ? (
+                    {activeTasksList.length === 0 ? (
                       <div className="h-full flex flex-col items-center justify-center text-center py-20 opacity-75">
                         <div className="w-20 h-20 bg-emerald-50 dark:bg-emerald-900/20 rounded-full flex items-center justify-center mb-6 animate-in zoom-in duration-500">
                           <CheckCircle2 className="w-10 h-10 text-emerald-500" />
@@ -533,7 +562,7 @@ export default function StudentDashboard() {
                         </p>
                       </div>
                     ) : (
-                      tasks.filter(t => !t.completed).map(task => (
+                      paginatedActiveTasks.map(task => (
                         <div 
                           key={task.id} 
                           className={`group bg-white dark:bg-slate-800 rounded-xl p-4 shadow-sm border border-slate-200 dark:border-slate-700 hover:shadow-md hover:border-brand-300 dark:hover:border-brand-700 transition-all border-l-4 ${getPriorityBorder(task.priority)} relative overflow-hidden`}
@@ -590,6 +619,16 @@ export default function StudentDashboard() {
                     )}
                   </div>
                 </div>
+                
+                {/* Active Tasks Pagination */}
+                <div className="px-6 pb-6 pt-2 bg-slate-50/30 dark:bg-slate-900/20">
+                  <Pagination 
+                     currentPage={activeTaskPage}
+                     totalPages={totalActivePages}
+                     onPageChange={setActiveTaskPage}
+                     className="border-t-0 px-0"
+                  />
+                </div>
               </div>
             </div>
 
@@ -601,27 +640,36 @@ export default function StudentDashboard() {
                     <h3 className="font-bold text-slate-900 dark:text-white text-sm uppercase tracking-wide flex items-center gap-2">
                       <History className="w-4 h-4" /> History
                     </h3>
-                    <span className="text-xs text-slate-500">{tasks.filter(t => t.completed).length} Done</span>
+                    <span className="text-xs text-slate-500">{historyTasksList.length} Done</span>
                   </div>
-                  <div className="p-4 max-h-[500px] overflow-y-auto space-y-2 custom-scrollbar">
-                    {tasks.filter(t => t.completed).map(task => (
-                        <div key={task.id} className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-3 flex items-start gap-3 border border-slate-100 dark:border-slate-700/50 hover:bg-white dark:hover:bg-slate-800 transition-colors group">
-                          <button onClick={() => toggleTask(task)} className="text-emerald-500 mt-0.5">
-                              <CheckCircle2 className="w-4 h-4" />
-                          </button>
-                          <div className="flex-1 min-w-0">
-                              <span className="block text-slate-500 dark:text-slate-400 line-through text-sm font-medium leading-tight truncate">
-                                  {task.title}
-                              </span>
-                              <span className="text-[10px] text-slate-400 mt-1 block">
-                                {task.completedAt ? format(task.completedAt, 'MMM d') : 'Done'}
-                              </span>
+                  <div className="p-4 space-y-2">
+                    <div className="space-y-2 max-h-[500px] overflow-y-auto custom-scrollbar pr-1">
+                      {paginatedHistoryTasks.map(task => (
+                          <div key={task.id} className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-3 flex items-start gap-3 border border-slate-100 dark:border-slate-700/50 hover:bg-white dark:hover:bg-slate-800 transition-colors group">
+                            <button onClick={() => toggleTask(task)} className="text-emerald-500 mt-0.5">
+                                <CheckCircle2 className="w-4 h-4" />
+                            </button>
+                            <div className="flex-1 min-w-0">
+                                <span className="block text-slate-500 dark:text-slate-400 line-through text-sm font-medium leading-tight truncate">
+                                    {task.title}
+                                </span>
+                                <span className="text-[10px] text-slate-400 mt-1 block">
+                                  {task.completedAt ? format(task.completedAt, 'MMM d') : 'Done'}
+                                </span>
+                            </div>
+                            <button onClick={() => confirmDelete(task.id)} className="text-slate-300 hover:text-red-400 transition-colors p-1 opacity-0 group-hover:opacity-100">
+                                <Trash2 className="w-3.5 h-3.5" />
+                            </button>
                           </div>
-                          <button onClick={() => confirmDelete(task.id)} className="text-slate-300 hover:text-red-400 transition-colors p-1 opacity-0 group-hover:opacity-100">
-                              <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                    ))}
+                      ))}
+                    </div>
+                    
+                    <Pagination 
+                        currentPage={historyPage}
+                        totalPages={totalHistoryPages}
+                        onPageChange={setHistoryPage}
+                        className="px-0 py-2 border-t-0"
+                    />
                   </div>
                 </div>
               ) : (
