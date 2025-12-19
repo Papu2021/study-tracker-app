@@ -54,9 +54,6 @@ export const Pagination: React.FC<PaginationProps> = ({
               <ChevronLeft className="h-5 w-5" aria-hidden="true" />
             </button>
             
-            {/* Simple Logic: Show current page in middle if many pages, or just logic to show prev/next buttons usually suffices for simple apps, 
-                but here we keep it simple with just arrows and text info */}
-            
             <button
               onClick={() => onPageChange(currentPage + 1)}
               disabled={currentPage === totalPages}

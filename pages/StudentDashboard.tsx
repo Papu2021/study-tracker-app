@@ -16,7 +16,7 @@ import {
   LogOut, Moon, Sun, Plus, CheckCircle2, Circle, 
   Trash2, Calendar, Layout, Clock, Pencil, X,
   Flag, Zap, Trophy, Target, Flame, Coffee, History,
-  BrainCircuit, Hash
+  BrainCircuit, Hash, Lock, AlertCircle
 } from 'lucide-react';
 import { format, isToday, isFuture, isPast, startOfDay, parseISO } from 'date-fns';
 
@@ -157,6 +157,10 @@ export default function StudentDashboard() {
   };
 
   const toggleTask = async (task: Task) => {
+    // Extra safety: Prevent completion if overdue
+    const isOverdue = !task.completed && isPast(startOfDay(task.dueDate)) && !isToday(task.dueDate);
+    if (isOverdue) return;
+
     try {
       const newStatus = !task.completed;
       
@@ -562,60 +566,76 @@ export default function StudentDashboard() {
                         </p>
                       </div>
                     ) : (
-                      paginatedActiveTasks.map(task => (
-                        <div 
-                          key={task.id} 
-                          className={`group bg-white dark:bg-slate-800 rounded-xl p-4 shadow-sm border border-slate-200 dark:border-slate-700 hover:shadow-md hover:border-brand-300 dark:hover:border-brand-700 transition-all border-l-4 ${getPriorityBorder(task.priority)} relative overflow-hidden`}
-                        >
-                          <div className="flex items-start gap-4 relative z-10">
-                            <button 
-                              onClick={() => toggleTask(task)}
-                              className="mt-1 text-slate-300 hover:text-emerald-500 transition-colors"
-                              title="Mark as completed"
-                            >
-                              <Circle className="w-6 h-6" />
-                            </button>
-                            
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-start justify-between gap-2">
-                                <h4 className="font-semibold text-slate-800 dark:text-slate-100 leading-snug break-words pr-8">
-                                  {task.title}
-                                </h4>
-                                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity absolute top-0 right-0">
-                                  <button onClick={() => openEditModal(task)} className="p-1.5 text-slate-400 hover:text-brand-500 hover:bg-brand-50 dark:hover:bg-brand-900/20 rounded-lg transition-colors">
-                                    <Pencil className="w-4 h-4" />
-                                  </button>
-                                  <button onClick={() => confirmDelete(task.id)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors">
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
-                                </div>
-                              </div>
+                      paginatedActiveTasks.map(task => {
+                        const isTaskOverdue = !task.completed && isPast(startOfDay(task.dueDate)) && !isToday(task.dueDate);
+                        
+                        return (
+                          <div 
+                            key={task.id} 
+                            className={`group bg-white dark:bg-slate-800 rounded-xl p-4 shadow-sm border border-slate-200 dark:border-slate-700 hover:shadow-md hover:border-brand-300 dark:hover:border-brand-700 transition-all border-l-4 ${getPriorityBorder(task.priority)} relative overflow-hidden ${isTaskOverdue ? 'bg-slate-50 dark:bg-slate-900/50 opacity-90' : ''}`}
+                          >
+                            <div className="flex items-start gap-4 relative z-10">
+                              <button 
+                                onClick={() => !isTaskOverdue && toggleTask(task)}
+                                disabled={isTaskOverdue}
+                                className={`mt-1 transition-colors ${
+                                  isTaskOverdue 
+                                  ? 'text-slate-200 dark:text-slate-700 cursor-not-allowed' 
+                                  : 'text-slate-300 hover:text-emerald-500'
+                                }`}
+                                title={isTaskOverdue ? "Task is overdue and cannot be completed" : "Mark as completed"}
+                              >
+                                {isTaskOverdue ? <Lock className="w-6 h-6 text-red-400/50" /> : <Circle className="w-6 h-6" />}
+                              </button>
                               
-                              <div className="flex flex-wrap items-center gap-3 mt-2">
-                                <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded flex items-center gap-1 ${
-                                    task.priority === 'high' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
-                                    task.priority === 'medium' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' :
-                                    'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
-                                }`}>
-                                  {task.priority === 'high' && <Flame className="w-3 h-3" />}
-                                  {task.priority === 'medium' && <Zap className="w-3 h-3" />}
-                                  {task.priority === 'low' && <Coffee className="w-3 h-3" />}
-                                  {task.priority || 'medium'}
-                                </span>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-start justify-between gap-2">
+                                  <h4 className={`font-semibold leading-snug break-words pr-8 ${isTaskOverdue ? 'text-slate-500 dark:text-slate-400' : 'text-slate-800 dark:text-slate-100'}`}>
+                                    {task.title}
+                                  </h4>
+                                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity absolute top-0 right-0">
+                                    <button onClick={() => openEditModal(task)} className="p-1.5 text-slate-400 hover:text-brand-500 hover:bg-brand-50 dark:hover:bg-brand-900/20 rounded-lg transition-colors">
+                                      <Pencil className="w-4 h-4" />
+                                    </button>
+                                    <button onClick={() => confirmDelete(task.id)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors">
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                </div>
+                                
+                                <div className="flex flex-wrap items-center gap-3 mt-2">
+                                  {isTaskOverdue ? (
+                                    <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded flex items-center gap-1 bg-red-600 text-white shadow-sm shadow-red-500/20">
+                                      <AlertCircle className="w-3 h-3" />
+                                      Locked (Overdue)
+                                    </span>
+                                  ) : (
+                                    <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded flex items-center gap-1 ${
+                                        task.priority === 'high' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
+                                        task.priority === 'medium' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' :
+                                        'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                                    }`}>
+                                      {task.priority === 'high' && <Flame className="w-3 h-3" />}
+                                      {task.priority === 'medium' && <Zap className="w-3 h-3" />}
+                                      {task.priority === 'low' && <Coffee className="w-3 h-3" />}
+                                      {task.priority || 'medium'}
+                                    </span>
+                                  )}
 
-                                <div className={`flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full ${
-                                  isPast(startOfDay(task.dueDate)) && !isToday(task.dueDate) 
-                                    ? 'bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400' 
-                                    : 'bg-slate-100 text-slate-500 dark:bg-slate-700/50 dark:text-slate-400'
-                                }`}>
-                                  <Calendar className="w-3 h-3" />
-                                  {isToday(task.dueDate) ? 'Today' : format(task.dueDate, 'MMM d, yyyy')}
+                                  <div className={`flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full ${
+                                    isTaskOverdue 
+                                      ? 'bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400' 
+                                      : 'bg-slate-100 text-slate-500 dark:bg-slate-700/50 dark:text-slate-400'
+                                  }`}>
+                                    <Calendar className="w-3 h-3" />
+                                    {isToday(task.dueDate) ? 'Today' : format(task.dueDate, 'MMM d, yyyy')}
+                                  </div>
                                 </div>
                               </div>
                             </div>
                           </div>
-                        </div>
-                      ))
+                        );
+                      })
                     )}
                   </div>
                 </div>

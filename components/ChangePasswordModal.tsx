@@ -1,11 +1,12 @@
+
 import React, { useState } from 'react';
-import { updatePassword } from 'firebase/auth';
+// Fix: Use modular doc/updateDoc but compat updatePassword on the user object
 import { updateDoc, doc } from 'firebase/firestore';
-import { auth, db } from '../firebase';
+import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
-import { ShieldCheck, Lock, Eye, EyeOff, Sparkles, CheckCircle2 } from 'lucide-react';
+import { ShieldCheck, Lock, Eye, EyeOff, Sparkles } from 'lucide-react';
 
 export const ChangePasswordModal: React.FC = () => {
   const { user, refreshProfile, logout, userProfile } = useAuth();
@@ -34,7 +35,8 @@ export const ChangePasswordModal: React.FC = () => {
     setLoading(true);
 
     try {
-      await updatePassword(user, newPassword);
+      // Fix: Use user.updatePassword (compat) instead of modular function if named export is missing
+      await user.updatePassword(newPassword);
       // Important: Turn off the flag so they aren't asked again
       await updateDoc(doc(db, 'users', user.uid), {
         requiresPasswordChange: false

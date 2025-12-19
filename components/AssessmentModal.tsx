@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { addDoc, collection, doc, updateDoc } from 'firebase/firestore';
@@ -199,7 +198,7 @@ export const AssessmentModal: React.FC<AssessmentModalProps> = ({ isOpen, onClos
                 </div>
               </div>
               <p className="text-sm font-medium text-brand-800 dark:text-brand-200">
-                We will reach out to you on <strong>Telegram</strong> with your personalized result reviewed by our Dream Stars VIP Doctors! 🚀
+                We will reach out to you on telegram with your personalized result reviewed by our Dream Stars VIP Doctors! 🚀
               </p>
            </div>
 
@@ -279,19 +278,22 @@ export const AssessmentModal: React.FC<AssessmentModalProps> = ({ isOpen, onClos
 
                {STUDY_QUESTIONS.map((q, index) => (
                  <div key={index} className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-5 border border-slate-100 dark:border-slate-800 hover:border-brand-200 dark:hover:border-brand-900/50 transition-colors">
-                    <div className="mb-3 flex gap-3">
-                       {/* Number Circle */}
-                       <span className="flex items-center justify-center w-6 h-6 rounded-full bg-brand-100 dark:bg-brand-900/40 text-brand-600 dark:text-brand-400 text-xs font-bold shrink-0 mt-0.5">
-                         {index + 1}
-                       </span>
-                       {/* Question Text */}
-                       <p className="text-slate-700 dark:text-slate-300 text-sm leading-relaxed font-medium pt-0.5">
-                         {q}
-                       </p>
+                    <div className="mb-3">
+                      <div className="flex items-center gap-2 mb-2">
+                         <span className="flex items-center justify-center w-6 h-6 rounded-full bg-brand-100 dark:bg-brand-900/40 text-brand-600 dark:text-brand-400 text-xs font-bold">
+                           {index + 1}
+                         </span>
+                         <h4 className="font-bold text-slate-900 dark:text-white text-base">
+                           Question {index + 1}
+                         </h4>
+                      </div>
+                      <p className="text-slate-600 dark:text-slate-300 text-sm leading-relaxed pl-8 font-medium">
+                        {q}
+                      </p>
                     </div>
                     
                     {/* Options Row */}
-                    <div className="flex flex-wrap gap-2 pl-9 mt-4">
+                    <div className="flex flex-wrap gap-2 pl-8 mt-4">
                        {CHOICES.map((choice) => {
                          const isSelected = habitAnswers[index] === choice;
                          return (
@@ -342,8 +344,8 @@ export const AssessmentModal: React.FC<AssessmentModalProps> = ({ isOpen, onClos
                          </h4>
                       </div>
                       
-                      {/* Question Text - formatted for readability */}
-                      <p className="text-slate-600 dark:text-slate-300 text-sm leading-relaxed pl-8">
+                      {/* Question Text */}
+                      <p className="text-slate-600 dark:text-slate-300 text-sm leading-relaxed pl-8 font-medium">
                         {q.text}
                       </p>
                     </div>

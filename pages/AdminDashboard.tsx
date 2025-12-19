@@ -1,10 +1,10 @@
-
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { collection, query, getDocs, setDoc, doc, onSnapshot, orderBy, limit, updateDoc, where, runTransaction, getDoc } from 'firebase/firestore';
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
+// Fix: Import firebase compat to resolve "no exported member" for App/Auth functions
+import firebase from 'firebase/compat/app';
+import 'firebase/compat/auth';
 import { db, firebaseConfig } from '../firebase'; 
 import { UserProfile, Task, AppNotification, Assessment } from '../types';
 import { ContributionGraph } from '../components/ContributionGraph';
@@ -131,10 +131,12 @@ const PerformanceLineChart = ({ tasks, label = "Performance", range = 'month', c
           })}
         </svg>
         
-        {/* X-Axis Labels */}
-        <div className="flex justify-between mt-2 px-1">
-           {dataPoints.filter((_, i) => i % (range === 'week' ? 1 : 5) === 0).map((d, i) => (
-              <span key={i} className="text-[10px] text-slate-400">{d.day}</span>
+        {/* X-Axis Labels - UPDATED to show all days when in month view */}
+        <div className="flex justify-between mt-2 px-1 gap-px">
+           {dataPoints.map((d, i) => (
+              <span key={i} className="text-[7px] sm:text-[9px] text-slate-400 flex-1 text-center leading-none">
+                {d.day}
+              </span>
            ))}
         </div>
       </div>
@@ -367,7 +369,7 @@ export default function AdminDashboard() {
 
     setIsCreatingUser(true);
 
-    let secondaryApp: any;
+    let secondaryApp: firebase.app.App;
     try {
       // Generate unique Student ID atomically
       const studentId = await runTransaction(db, async (transaction) => {
@@ -386,15 +388,13 @@ export default function AdminDashboard() {
       });
 
       // Initialize secondary app to create user without logging out admin
-      if (getApps().some(app => app.name === "SecondaryApp")) {
-        secondaryApp = getApp("SecondaryApp");
-      } else {
-        secondaryApp = initializeApp(firebaseConfig, "SecondaryApp");
-      }
+      // Fix: Use firebase.initializeApp and firebase.apps for compat API
+      const appName = "SecondaryApp";
+      secondaryApp = firebase.apps.find(a => a.name === appName) || firebase.initializeApp(firebaseConfig, appName);
       
-      const secondaryAuth = getAuth(secondaryApp);
-      const userCredential = await createUserWithEmailAndPassword(secondaryAuth, newUserEmail, newUserPassword);
-      const newUser = userCredential.user;
+      const secondaryAuth = secondaryApp.auth();
+      const userCredential = await secondaryAuth.createUserWithEmailAndPassword(newUserEmail, newUserPassword);
+      const newUser = userCredential.user!;
       
       await setDoc(doc(db, 'users', newUser.uid), {
         uid: newUser.uid,
@@ -408,7 +408,7 @@ export default function AdminDashboard() {
         requiresPasswordChange: true 
       });
       
-      await signOut(secondaryAuth);
+      await secondaryAuth.signOut();
       
       setCreateUserSuccess(`New ${newUserRole.toLowerCase()} account created successfully! ID: ${studentId}`);
       
@@ -504,15 +504,17 @@ export default function AdminDashboard() {
   
   const totalStudentPages = Math.ceil(filteredStudents.length / ITEMS_PER_PAGE);
 
-  // Filter Tasks
+  // Filter Tasks - UPDATED: Sort by createdAt descending
   const filteredTasks = useMemo(() => {
-    return allTasks.filter(task => {
-        const studentName = getStudentName(task.userId).toLowerCase();
-        const taskTitle = task.title.toLowerCase();
-        const query = searchQuery.toLowerCase();
-        return studentName.includes(query) || taskTitle.includes(query);
-    });
-  }, [allTasks, searchQuery, students]); // added students to dependency to ensure names are ready
+    return allTasks
+      .filter(task => {
+          const studentName = getStudentName(task.userId).toLowerCase();
+          const taskTitle = task.title.toLowerCase();
+          const query = searchQuery.toLowerCase();
+          return studentName.includes(query) || taskTitle.includes(query);
+      })
+      .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  }, [allTasks, searchQuery, students]);
 
   // Paginated Tasks
   const paginatedTasks = useMemo(() => {
@@ -528,12 +530,25 @@ export default function AdminDashboard() {
     setStudentFilter('all');
   };
 
-  // Selected Student Logic
+  // Selected Student Logic - UPDATED: Sort completed history by recent first
   const selectedStudentTasks = useMemo(() => {
     if (!selectedStudent) return [];
     return allTasks
       .filter(t => t.userId === selectedStudent.uid)
-      .sort((a,b) => a.dueDate - b.dueDate);
+      .sort((a, b) => {
+        // If both completed, show more recent completion at top
+        if (a.completed && b.completed) {
+          return (b.completedAt || 0) - (a.completedAt || 0);
+        }
+        // If only one is completed, put completed at the end of the combined view?
+        // Usually, in a "History" context, we want to see what was just done.
+        // Let's sort completed vs active, putting active first then history recent-first.
+        if (a.completed !== b.completed) {
+          return a.completed ? 1 : -1;
+        }
+        // If both active, sort by due date ascending
+        return a.dueDate - b.dueDate;
+      });
   }, [allTasks, selectedStudent]);
   
   // Paginated Inspection Tasks
@@ -1215,7 +1230,7 @@ export default function AdminDashboard() {
                     </div>
                   </div>
 
-                  {/* Task List */}
+                  {/* Task List - NOW SHOWING RECENT COMPLETIONS AT TOP */}
                   <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
                      <div className="p-4 border-b border-slate-100 dark:border-slate-700 font-bold text-slate-800 dark:text-white flex items-center gap-2 justify-between">
                         <div className="flex items-center gap-2">

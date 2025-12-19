@@ -1,5 +1,6 @@
+
 import React, { useState } from 'react';
-import { signInWithEmailAndPassword } from 'firebase/auth';
+// Fix: Use auth instance from firebase.ts
 import { auth } from '../firebase';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
@@ -18,7 +19,8 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      // Fix: Use compat signInWithEmailAndPassword from auth instance
+      await auth.signInWithEmailAndPassword(email, password);
     } catch (err: any) {
       setError(err.message.replace('Firebase: ', ''));
     } finally {
